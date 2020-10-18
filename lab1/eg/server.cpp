@@ -6,7 +6,7 @@
 int main(int argc, char* argv[])  
 {  
     //init WSA  
-    WORD sockVersion = MAKEWORD(2,2);  
+    WORD sockVersion = MAKEWORD(2,2);
     WSADATA wsaData;  
     if(WSAStartup(sockVersion, &wsaData)!=0)  
     {  
@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
             printf("accept error !");  
             continue;  
         }  
-        printf("accept a link��%s \r\n", inet_ntoa(remoteAddr.sin_addr));  
+        printf("accept a link %s \r\n", inet_ntoa(remoteAddr.sin_addr));  
           
         //recieve data  
         int ret = recv(sClient, revData, 255, 0);         
@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
         }  
   
         //send data
-        const char * sendData = "hello��TCP��\n";  
+        const char * sendData = "hello TCP client\n";  
         send(sClient, sendData, strlen(sendData), 0);  
         closesocket(sClient);  
     }  
