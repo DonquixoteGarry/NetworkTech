@@ -5,7 +5,7 @@
   
 int main(int argc, char* argv[])  
 {  
-    //初始化WSA  
+    //init WSA  
     WORD sockVersion = MAKEWORD(2,2);  
     WSADATA wsaData;  
     if(WSAStartup(sockVersion, &wsaData)!=0)  
@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
         return 0;  
     }  
   
-    //创建套接字  
+    //create socket  
     SOCKET slisten = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);  
     if(slisten == INVALID_SOCKET)  
     {  
@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
         return 0;  
     }  
   
-    //绑定IP和端口  
+    //bind IP and port  
     sockaddr_in sin;  
     sin.sin_family = AF_INET;  
     sin.sin_port = htons(8888);  
@@ -32,30 +32,30 @@ int main(int argc, char* argv[])
         printf("bind error !");  
     }  
   
-    //开始监听  
+    //start listening
     if(listen(slisten, 5) == SOCKET_ERROR)  
     {  
         printf("listen error !");  
         return 0;  
     }  
   
-    //循环接收数据  
+    //loop:recieve data  
     SOCKET sClient;  
     sockaddr_in remoteAddr;  
     int nAddrlen = sizeof(remoteAddr);  
     char revData[255];   
     while (true)  
     {  
-        printf("等待连接...\n");  
+        printf("wait to link...\n");  
         sClient = accept(slisten, (SOCKADDR *)&remoteAddr, &nAddrlen);  
         if(sClient == INVALID_SOCKET)  
         {  
             printf("accept error !");  
             continue;  
         }  
-        printf("接受到一个连接：%s \r\n", inet_ntoa(remoteAddr.sin_addr));  
+        printf("accept a link��%s \r\n", inet_ntoa(remoteAddr.sin_addr));  
           
-        //接收数据  
+        //recieve data  
         int ret = recv(sClient, revData, 255, 0);         
         if(ret > 0)  
         {  
@@ -63,8 +63,8 @@ int main(int argc, char* argv[])
             printf(revData,"\n");  
         }  
   
-        //发送数据  
-        const char * sendData = "你好，TCP客户端！\n";  
+        //send data
+        const char * sendData = "hello��TCP��\n";  
         send(sClient, sendData, strlen(sendData), 0);  
         closesocket(sClient);  
     }  
