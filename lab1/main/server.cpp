@@ -7,6 +7,7 @@ using namespace std;
 
 void version_init()
 {
+	//choose version 2.2
 	WORD socket_version = MAKEWORD(2,2);
 	int version_error;
 	WSADATA data;
@@ -16,13 +17,6 @@ void version_init()
 	if(version_error!=0)cout<<"socket init fail\n";
 	else cout<<"socket init OK\n";
 	
-	//test the word version
-	if (LOBYTE(data.wVersion) != 2 || HIBYTE(data.wHighVersion) != 2)
-    {
-        cout << "word version invaild"<< endl;
-        WSACleanup();
-    }
-    else cout << "word version OK" << endl;
 }
 
 int main()
@@ -31,14 +25,17 @@ int main()
 	
 	int addr_len=sizeof(SOCKADDR);
 
+	//make a server address bag
 	SOCKADDR_IN server_addr;
 	server_addr.sin_family = AF_INET;
     server_addr.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(1234);
     
+	//make a server socket(with the address bag)
     SOCKET server_socket;
-    server_socket = socket(AF_INET,SOCK_STREAM,0);
+    server_socket = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
 
+	//bind it
 	if (bind(server_socket, (SOCKADDR*)& server_addr, addr_len) == SOCKET_ERROR) 
 	{
         cout << "server socket bind fail" << endl;
@@ -46,6 +43,7 @@ int main()
     }
     else cout << "server socket bind OK" << endl;
 	
+	//set to listen
 	if (listen(server_socket, SOMAXCONN) < 0) 
     {
         cout << "server socket set to listen fail" << endl;
@@ -57,6 +55,7 @@ int main()
     	cout << "server socket is listening, wait..." << endl;
 	}
 	
+	//make an accept socket
 	SOCKADDR_IN accept_addr;	
 	SOCKET accept_socket;
 	accept_socket=accept(server_socket,(SOCKADDR*)& accept_addr,&addr_len);
@@ -90,7 +89,14 @@ int main()
 
 		cout<<"\nnow reply to client: \n('q' to quit)\n";
 		cin.getline(send_data_buffer,255);
-		if(send_data_buffer[0]=='q')break;
+		if((send_data_buffer[1]=='\0')&&(send_data_buffer[0]=='q'))
+		{
+			cout << "\nclient is closed." << endl;
+			closesocket(server_socket);
+    		WSACleanup();
+			system("pause");    
+    		return 0;
+		}
 
 		send_len = send(accept_socket, send_data_buffer, 255, 0);
         if (send_len < 0) 
