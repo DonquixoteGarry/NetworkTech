@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <winsock2.h>
 
-#pragma comment(lib,"ws2_32.lib")
 #define MAXLEN 1024
 #define FILENAME_MAXLEN 64
 
@@ -18,24 +17,19 @@ int main()
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     server_addr.sin_port = htons(1234);
     
-    char filename_buffer[FILENAME_MAXLEN];
-    
     bind(server_sock, (SOCKADDR *)&server_addr, sizeof(server_addr));
     
-    SOCKADDR client_addr;
-    int socket_addr_len = sizeof(client_addr);
+	SOCKADDR client_addr;
+    char filename_buffer[FILENAME_MAXLEN];
+	int socket_addr_len = sizeof(client_addr);
     int filename_receive_len = recvfrom(server_sock, filename_buffer, FILENAME_MAXLEN, 0, &client_addr,&socket_addr_len);
-    
-    printf("now received a transferring request from client called %s\n",filename_buffer);
-    
-    FILE *fp = fopen(filename_buffer, "rb");
     
     char file_exist[MAXLEN]="T\0";
     char file_not_exist[MAXLEN]="F\0";
-    
+	printf("now received a transferring request from client called %s\n",filename_buffer);
+    FILE *fp = fopen(filename_buffer, "rb");
     printf("client request to download ':%s''\n", filename_buffer);
-    
-	if (fp == NULL)
+    if (fp == NULL)
     {
         printf("local file '%s' open error,maybe it doesn't exist\n",filename_buffer);
         sendto(server_sock, file_not_exist,MAXLEN, 0, &client_addr, socket_addr_len);
@@ -65,11 +59,13 @@ int main()
     }
     
     if((1)&&(is_transferred==true))
-		printf("transferring OK\n");
+    {
+        printf("transferring OK\n");
+    }
 	
     fclose(fp);
     closesocket(server_sock);
     WSACleanup();
-    system("pause");
+    //system("pause");
     return 0;
 }

@@ -2,3 +2,4 @@
 1:
 	rm client/client.exe client/a.txt 
 	rm server/server.exe
+	
