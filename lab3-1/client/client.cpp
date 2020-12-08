@@ -24,10 +24,7 @@ int main()
     scanf("%s", filename_buffer);
     int filename_len = strlen(filename_buffer);
     
-    sendto(client_sock, filename_buffer,
-            FILENAME_MAXLEN, 0, 
-            (SOCKADDR *)&server_addr, 
-            sizeof(server_addr));
+    sendto(client_sock, filename_buffer,FILENAME_MAXLEN, 0, (SOCKADDR *)&server_addr, sizeof(server_addr));
     
     printf("now sending the transferring request to the server\n",filename_buffer);
     
@@ -37,10 +34,7 @@ int main()
     int socket_len = sizeof(recvfrom_addr);
     
     int recv_info_len=
-        recvfrom(client_sock,exist_info,
-                    MAXLEN,0, 
-                    (SOCKADDR *)&recvfrom_addr, 
-                    &socket_len);
+        recvfrom(client_sock,exist_info,MAXLEN,0, (SOCKADDR *)&recvfrom_addr, &socket_len);
     
     if(exist_info[0]=='F')
     {
@@ -68,18 +62,13 @@ int main()
     char file_download_buffer[MAXLEN];
 	bool is_downloaded=false;
 	
-	while ((is_downloaded==false)&&
-            (file_content_len = 
-                recvfrom(client_sock,
-                    file_download_buffer,
-                    MAXLEN,0, 
-                    (SOCKADDR *)&recvfrom_addr, 
-                    &socket_len)) 
-            > 0 )
+	while (1)
     {
+        if(is_downloaded!=false) break;
+        file_content_len = recvfrom(client_sock,file_download_buffer,MAXLEN,0, (SOCKADDR *)&recvfrom_addr, &socket_len);
+        if(file_content_len<=0) break; 
         printf("downloaded content:\n%s\n",file_download_buffer);
-        fwrite(file_download_buffer, 1, 
-                file_content_len, fp);
+        fwrite(file_download_buffer, 1, file_content_len, fp);
         memset(file_download_buffer,0,MAXLEN);
         is_downloaded=true;
     }
@@ -87,7 +76,7 @@ int main()
 	if(is_downloaded==true)
 		printf("download OK\n");
     
-	fclose(fp);    
+    fclose(fp);    
     closesocket(client_sock);
     WSACleanup();
     system("pause");
