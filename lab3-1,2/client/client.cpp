@@ -19,8 +19,9 @@ const unsigned char FIRST_WAVE = 0x06;
 const unsigned char SECOND_WAVE = 0x07;
 const unsigned char LAST = 0x08;
 const unsigned char NOTLAST = 0x09;
+
 const int TIMEOUT = 500;
-int WINDOW_MAXSIZE = 2;
+int WINDOW_MAXSIZE = 1;
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
 
@@ -28,7 +29,7 @@ struct bag_elem
 {
 public:
 	int order;
-	bag_elem(int bag_time,int bag_order)
+	bag_elem(int bag_order)
 	{
 		order = bag_order;
 	}
@@ -150,7 +151,7 @@ int main()
 			sendto(client, tmp, 2, 0, (sockaddr *) &server_addr, sizeof(server_addr));
             break;
 		}
-	} 
+	}
 	printf("shake over\n");
 	queue<struct bag_elem> list;
 	int send = 0;
@@ -168,7 +169,7 @@ int main()
 				tmp=filename.length() - (num - 1)*MAXLEN;
 			else tmp=MAXLEN;
 			bag_send((char *)filename.c_str() + send * MAXLEN,tmp,next % ((int) UCHAR_MAX + 1),send==num-1);
-			list.push(bag_elem(clock(),next % ((int) UCHAR_MAX + 1)));
+			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
 			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
 			next++;
 			send++;
@@ -202,7 +203,7 @@ int main()
 		if(list.size() < WINDOW_MAXSIZE && send != num)
 		{
 			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
-			list.push(bag_elem(clock(),next % ((int) UCHAR_MAX + 1)));
+			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
 			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
 			next++;
 			send++;
@@ -224,7 +225,6 @@ int main()
             list.pop();
         }
 	}
-	int time_end = clock();
 	printf("already send file\n");
 	printf("start to wave\n");
 	while(1)
@@ -239,8 +239,12 @@ int main()
 		int fail = 0;
 		while(recvfrom(client, recv, 2, 0, (sockaddr *) &server_addr, &len) == SOCKET_ERROR)
 		{
-
-		}
+			if (clock() - begin > TIMEOUT) 
+			{
+                fail = 1;
+                break;
+            }
+		};
 		if(fail == 0 && check_sum(recv,2) == 0 && recv[1] == SECOND_WAVE)
 		{
             break;

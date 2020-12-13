@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <fstream>
 #include <vector>
-#include <time.h>
 
 using namespace std;
 const int MAXLEN = 509;
@@ -17,7 +16,6 @@ const unsigned char FIRST_WAVE = 0x06;
 const unsigned char SECOND_WAVE = 0x07;
 const unsigned char LAST = 0x08;
 const unsigned char NOTLAST = 0x18;
-const int TIMEOUT = 500;
 
 
 SOCKET server;
@@ -153,7 +151,7 @@ int main()
     {
 		char recv[2];
         int len_tmp = sizeof(client_addr);
-        while (recvfrom(server, recv, 2, 0, (sockaddr *) &client_addr, &len_tmp) == SOCKET_ERROR);
+        while (recvfrom(server, recv, 2, 0, (sockaddr *) &client_addr, &len_tmp) == SOCKET_ERROR)
         if (check_sum(recv, 2) != 0 || recv[1] != (char)FIRST_WAVE)
             continue;
         recv[1] = SECOND_WAVE;
