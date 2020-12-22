@@ -21,7 +21,8 @@ const unsigned char LAST = 0x08;
 const unsigned char NOTLAST = 0x09;
 
 const int TIMEOUT = 500;
-int WINDOW_MAXSIZE = 1;
+int WINDOW_SIZE = 1;
+int SSTH = 1000;
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
 
@@ -162,7 +163,7 @@ int main()
 	{
 		if(send_ok == num)
 			break;
-		if(list.size() < WINDOW_MAXSIZE && send != num)
+		if(list.size() < WINDOW_SIZE && send != num)
 		{
 			int tmp;
 			if(send == num - 1) 
@@ -178,40 +179,8 @@ int main()
 		int len_tmp = sizeof(server_addr);
         if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
 		{
-            while (list.front().order != (unsigned char) recv[2]) 
-			{
-            	send_ok++;
-                base++;
-                bag_is_ok[list.front().order] = 0;
-                list.pop();
-            }
-            bag_is_ok[list.front().order] = 0;
-            send_ok++;
-            base++;
-            list.pop();
-        } 
-	}
-	send = 0;
-	next = base;
-	send_ok = 0;
-	num = len / MAXLEN + (len % MAXLEN != 0);
-	int time_begin = clock();
-	while(1)
-	{
-		if(send_ok == num)
-			break;
-		if(list.size() < WINDOW_MAXSIZE && send != num)
-		{
-			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
-			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
-			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
-			next++;
-			send++;
-		}
-		char recv[3];
-		int len_tmp = sizeof(server_addr);
-        if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
-		{
+			if(WINDOW_SIZE<=SSTH) WINDOW_SIZE=WINDOW_SIZE*2;
+			else WINDOW_SIZE++;
             while (list.front().order != (unsigned char) recv[2]) 
 			{
             	send_ok++;
@@ -224,6 +193,62 @@ int main()
             base++;
             list.pop();
         }
+		else
+		{
+			SSTH=WINDOW_SIZE/2;
+			WINDOW_SIZE=1;
+			//cout<<"拥塞!"<<endl;
+		}
+	}
+	send = 0;
+	next = base;
+	send_ok = 0;
+	num = len / MAXLEN + (len % MAXLEN != 0);
+	int time_begin = clock();
+	while(1)
+	{
+		if(send_ok == num)
+			break;
+		if(list.size() < WINDOW_SIZE && send != num)
+		{
+			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
+			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
+			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
+			next++;
+			send++;
+		}
+		char recv[3];
+		int len_tmp = sizeof(server_addr);
+        if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
+		{
+			if(WINDOW_SIZE<=SSTH) 
+			{
+				WINDOW_SIZE=WINDOW_SIZE*2;
+				cout<<"WINDOW_SIZE twice "<<" NOW IS "<<WINDOW_SIZE<<"\n";
+			}
+			else 
+			{
+				WINDOW_SIZE++;
+				cout<<"WINDOW_SIZE plus "<<" NOW IS "<<WINDOW_SIZE<<"\n";
+			}
+            while (list.front().order != (unsigned char) recv[2]) 
+			{
+            	send_ok++;
+                base++;
+                bag_is_ok[list.front().order] = 0;
+                list.pop();
+            }
+            bag_is_ok[list.front().order] = 0;
+            send_ok++;
+            base++;
+            list.pop();
+        }
+		else
+		{
+			SSTH=WINDOW_SIZE/2;
+			WINDOW_SIZE=1;
+			//cout<<"拥塞!"<<endl;
+		}
 	}
 	printf("already send file\n");
 	printf("start to wave\n");
