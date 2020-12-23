@@ -22,7 +22,8 @@ const unsigned char NOTLAST = 0x09;
 
 const int TIMEOUT = 500;
 int WINDOW_SIZE = 1;
-int SSTH = 1000;
+int SSTH = 32;
+
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
 
@@ -179,8 +180,8 @@ int main()
 		int len_tmp = sizeof(server_addr);
         if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
 		{
-			if(WINDOW_SIZE<=SSTH) WINDOW_SIZE=WINDOW_SIZE*2;
-			else WINDOW_SIZE++;
+			//if(WINDOW_SIZE<=SSTH) WINDOW_SIZE=WINDOW_SIZE*2;
+			//else WINDOW_SIZE++;
             while (list.front().order != (unsigned char) recv[2]) 
 			{
             	send_ok++;
@@ -193,12 +194,14 @@ int main()
             base++;
             list.pop();
         }
+		/*
 		else
 		{
 			SSTH=WINDOW_SIZE/2;
 			WINDOW_SIZE=1;
 			//cout<<"拥塞!"<<endl;
 		}
+		*/
 	}
 	send = 0;
 	next = base;
@@ -209,6 +212,7 @@ int main()
 	{
 		if(send_ok == num)
 			break;
+		/*
 		if(list.size() < WINDOW_SIZE && send != num)
 		{
 			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
@@ -216,7 +220,19 @@ int main()
 			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
 			next++;
 			send++;
+			cout<<"FILLING WINDOW\n";
 		}
+		*/
+		if(list.size() < WINDOW_SIZE && send != num)
+		{
+			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
+			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
+			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
+			next++;
+			send++;
+			cout<<"FILLING WINDOW\n";
+		}
+
 		char recv[3];
 		int len_tmp = sizeof(server_addr);
         if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
