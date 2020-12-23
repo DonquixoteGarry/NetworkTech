@@ -254,7 +254,6 @@ int main()
 			WINDOW_SIZE=1;
 			//cout<<"拥塞!"<<endl;
 		}
-
 	}
 	printf("already send file\n");
 	printf("start to wave\n");
