@@ -15,6 +15,7 @@ using namespace std;
 
 const int MAXLEN = 500;
 char storage[200000000];
+bool bag_is_ok[256];
 const unsigned char ACK = 0x01;
 const unsigned char NAK = 0x02;
 const unsigned char FIRST_SHAKE = 0x03;
@@ -31,6 +32,18 @@ int dupACK=0;
 
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
+
+struct bag_elem
+{
+public:
+	int time;
+	int order;
+	bag_elem(int bag_time,int bag_order)
+	{
+		time = bag_time;
+		order = bag_order;
+	}
+};
 
 unsigned char check_sum(char *check_start,int check_len)
 {
@@ -79,43 +92,46 @@ bool bag_send(char* message,int len,int order,int last=0)
 
 void send_window(char* message, int len) 
 {
-	queue<pair<int,int>> list;
+	queue<bag_elem> list;
 	static int base = 1;
-	int seq = base;
+	int next = base;
 	int num = len / MAXLEN + (len % MAXLEN != 0);
-	int temp_windowlast = 0;
-	int temp_last = 0;
-	bool itw[256] = { 0 };
+	int send = 0;
+	int send_ok = 0;
 	int last_pack = 0;
-	int addr_len = sizeof(client_addr);
+	int client_addr_len = sizeof(client_addr);
 	while (1) 
 	{
-		if (temp_last== num)
+		if (send_ok== num)
 			break;
 		if (CWND < SSTH && dupACK < 3)
 		{
-			if (list.size() * MAXLEN < CWND && temp_windowlast < num)
+			if (list.size() * MAXLEN < CWND && send < num)
 			{
-				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				list.push(make_pair(clock(), seq % 256));
-				itw[seq % 256] = 1;
-				seq++;
-				temp_windowlast++;
+				int tmp;
+				if(send==num-1)
+					tmp=len % MAXLEN;
+				else tmp=MAXLEN;
+				bag_send(message + send * MAXLEN, tmp, next % 256, send == num - 1);
+				list.push(bag_elem(clock(), next % 256));
+				bag_is_ok[next % 256] = 1;
+				next++;
+				send++;
 			}
 			char recv[3];
-			int recvsize = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
-			if (recvsize && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			int recvsize = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &client_addr_len);
+			if (recvsize && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
 			{
-				while (list.front().second != (unsigned char)recv[2]) 
+				while (list.front().order != (unsigned char)recv[2]) 
 				{
 					base++;
-					temp_last++;
-					itw[list.front().second] = 0;
+					send_ok++;
+					bag_is_ok[list.front().order] = 0;
 					list.pop();
 				}
 				base++;
-				temp_last++;
-				itw[list.front().second] = 0;
+				send_ok++;
+				bag_is_ok[list.front().order] = 0;
 				list.pop();
 				CWND += MAXLEN;
 				dupACK = 0;
@@ -129,17 +145,17 @@ void send_window(char* message, int len)
 					{
 						SSTH = CWND / 2;
 						CWND = SSTH + 3 * MAXLEN;
-						seq = base;
-						temp_windowlast -= list.size();
+						next = base;
+						send -= list.size();
 						while (list.size() != 0)
 							list.pop();	
 					}
 					last_pack = (unsigned char)recv[2];
 				}
-					if (clock() - list.front().first > TIMEOUT) 
+					if (clock() - list.front().time > TIMEOUT) 
 					{
-						seq = base;
-						temp_windowlast -= list.size();
+						next = base;
+						send -= list.size();
 						while (list.size() != 0)
 							list.pop();
 						SSTH = CWND / 2;
@@ -151,28 +167,32 @@ void send_window(char* message, int len)
 
 		else if (CWND >= SSTH && dupACK<3) 
 		{
-			if (list.size()*MAXLEN < CWND && temp_windowlast < num) 
+			if (list.size()*MAXLEN < CWND && send < num) 
 			{
-				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				list.push(make_pair(clock(), seq % 256));
-				itw[seq % 256] = 1;
-				seq++;
-				temp_windowlast++;
+				int tmp;
+				if(send==num-1)
+					tmp=len % MAXLEN;
+				else tmp=MAXLEN;
+				bag_send(message + send * MAXLEN, tmp, next % 256, send == num - 1);
+				list.push(bag_elem(clock(), next % 256));
+				bag_is_ok[next % 256] = 1;
+				next++;
+				send++;
 			}
 			char recv[3];
-			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr,&addr_len);
-			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr,&client_addr_len);
+			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
 			{
-				while (list.front().second != (unsigned char)recv[2]) 
+				while (list.front().order != (unsigned char)recv[2]) 
 				{
 					base++;
-					temp_last++;
-					itw[list.front().second] = 0;
+					send_ok++;
+					bag_is_ok[list.front().order] = 0;
 					list.pop();
 				}
 				base++;
-				temp_last++;
-				itw[list.front().second] = 0;
+				send_ok++;
+				bag_is_ok[list.front().order] = 0;
 				list.pop();
 				CWND += MAXLEN * (MAXLEN / CWND);
 				dupACK = 0;
@@ -186,18 +206,18 @@ void send_window(char* message, int len)
 					{
 						SSTH = CWND / 2;
 						CWND = SSTH + 3 * MAXLEN;
-						seq = base;
-						temp_windowlast -= list.size();
+						next = base;
+						send -= list.size();
 						while (list.size() != 0)
 							list.pop();
 					}
 					last_pack = (unsigned char)recv[2];
 				}
 					
-				if (clock() - list.front().first > TIMEOUT) 
+				if (clock() - list.front().time > TIMEOUT) 
 				{
-					seq = base;
-					temp_windowlast -= list.size();
+					next = base;
+					send -= list.size();
 					while (list.size() != 0)
 						list.pop();
 					SSTH = CWND / 2;
@@ -208,28 +228,32 @@ void send_window(char* message, int len)
 		}
 		else if (dupACK==3) 
 		{	
-			if (list.size() * MAXLEN < CWND && temp_windowlast < num) 
+			if (list.size() * MAXLEN < CWND && send < num) 
 			{
-				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				list.push(make_pair(clock(), seq % 256));
-				itw[seq % 256] = 1;
-				seq++;
-				temp_windowlast++;
+				int tmp;
+				if(send==num-1)
+					tmp=len % MAXLEN;
+				else tmp=MAXLEN;
+				bag_send(message + send * MAXLEN, tmp, next % 256, send == num - 1);
+				list.push(bag_elem(clock(), next % 256));
+				bag_is_ok[next % 256] = 1;
+				next++;
+				send++;
 			}
 			char recv[3];
-			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
-			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &client_addr_len);
+			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
 			{
-				while (list.front().second != (unsigned char)recv[2]) 
+				while (list.front().order != (unsigned char)recv[2]) 
 				{
 					base++;
-					temp_last++;
-					itw[list.front().second] = 0;
+					send_ok++;
+					bag_is_ok[list.front().order] = 0;
 					list.pop();
 				}
 				base++;
-				temp_last++;
-				itw[list.front().second] = 0;
+				send_ok++;
+				bag_is_ok[list.front().order] = 0;
 				list.pop();
 				CWND = SSTH;
 				dupACK = 0;
@@ -241,10 +265,10 @@ void send_window(char* message, int len)
 					CWND += MAXLEN;
 					last_pack = (unsigned char)recv[2];
 				}
-				if (clock() - list.front().first > TIMEOUT) 
+				if (clock() - list.front().time > TIMEOUT) 
 				{
-					seq = base;
-					temp_windowlast -= list.size();
+					next = base;
+					send -= list.size();
 					while (list.size() != 0)
 						list.pop();
 					SSTH = CWND / 2;
