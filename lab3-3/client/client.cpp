@@ -23,6 +23,7 @@ const unsigned char NOTLAST = 0x09;
 const int TIMEOUT = 500;
 int WINDOW_SIZE = 1;
 int SSTH = 32;
+int dupACK = 0;
 
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
@@ -199,7 +200,7 @@ int main()
 		{
 			SSTH=WINDOW_SIZE/2;
 			WINDOW_SIZE=1;
-			//cout<<"æ‹¥å¡ž!"<<endl;
+			//cout<<"ÓµÈû!"<<endl;
 		}
 		*/
 	}
@@ -210,8 +211,7 @@ int main()
 	int time_begin = clock();
 	while(1)
 	{
-		if(send_ok == num)
-			break;
+		if(send_ok == num)break;
 		if(list.size() < WINDOW_SIZE && send != num)
 		{
 			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
@@ -220,11 +220,11 @@ int main()
 			next++;
 			send++;
 			cout<<"FILLING WINDOW\n";
+			//continue;
 		}
 		char recv[3];
 		int len_tmp = sizeof(server_addr);
-
-		if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
+		if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]])
 		{
 			if(WINDOW_SIZE<=SSTH) 
 			{
@@ -252,8 +252,9 @@ int main()
 		{
 			SSTH=WINDOW_SIZE/2;
 			WINDOW_SIZE=1;
-			//cout<<"æ‹¥å¡ž!"<<endl;
+			cout<<"ÓµÈû!"<<endl;
 		}
+		
 	}
 	printf("already send file\n");
 	printf("start to wave\n");
