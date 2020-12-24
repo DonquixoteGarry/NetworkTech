@@ -1,15 +1,20 @@
 #include <iostream>
 #include <winsock2.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <fstream>
 #include <vector>
 #include <time.h>
+#include <string>
+#include <bitset>
 #include <queue>
+#include <cstdlib>
+#include <ctime>
 
 using namespace std;
-const int MAXLEN = 509;
+
+const int MAXLEN = 500;
 char storage[200000000];
-bool bag_is_ok[UCHAR_MAX + 1];
 const unsigned char ACK = 0x01;
 const unsigned char NAK = 0x02;
 const unsigned char FIRST_SHAKE = 0x03;
@@ -19,24 +24,13 @@ const unsigned char FIRST_WAVE = 0x06;
 const unsigned char SECOND_WAVE = 0x07;
 const unsigned char LAST = 0x08;
 const unsigned char NOTLAST = 0x09;
-
 const int TIMEOUT = 500;
-int WINDOW_SIZE = 1;
-int SSTH = 32;
-int dupACK = 0;
+double CWND = MAXLEN;
+int SSTH=16*MAXLEN;
+int dupACK=0;
 
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
-
-struct bag_elem
-{
-public:
-	int order;
-	bag_elem(int bag_order)
-	{
-		order = bag_order;
-	}
-};
 
 unsigned char check_sum(char *check_start,int check_len)
 {
@@ -52,11 +46,10 @@ unsigned char check_sum(char *check_start,int check_len)
     return ~check_value;
 }
 
-bool bag_send(char* message,int len,int order,int last=0){
+bool bag_send(char* message,int len,int order,int last=0)
+{
 	if(len > MAXLEN || (last == false && len != MAXLEN))
-	{
 		return false;
-	}
 	char *tmp;
 	int tmp_len;
 	if(!last)
@@ -65,9 +58,7 @@ bool bag_send(char* message,int len,int order,int last=0){
 		tmp[1] = NOTLAST;
 		tmp[2] = order;
 		for (int i = 3; i < len + 3; i++)
-		{
 			tmp[i] = message[i - 3];
-		}
         tmp[0] = check_sum(tmp + 1, len + 2);
         tmp_len = len + 3;
 	}
@@ -78,9 +69,7 @@ bool bag_send(char* message,int len,int order,int last=0){
 		tmp[2] = order;
 		tmp[3] = len;
 		for(int i = 4;i<len+4;i++)
-		{
 			tmp[i] = message[i - 4];
-		}
 		tmp[0] = check_sum(tmp + 1 ,len + 3);
 		tmp_len = len + 4;
 	}
@@ -88,201 +77,302 @@ bool bag_send(char* message,int len,int order,int last=0){
 	return true; 
 }
 
-
-
-int main()
+void send_window(char* message, int len) 
 {
-	WSADATA wsadata;
-	int order = 0;
-	static int base = 0;
-	if(WSAStartup(MAKEWORD(2,2),&wsadata))
+	queue<pair<int,int>> list;
+	static int base = 1;
+	int seq = base;
+	int num = len / MAXLEN + (len % MAXLEN != 0);
+	int temp_windowlast = 0;
+	int temp_last = 0;
+	bool itw[256] = { 0 };
+	int last_pack = 0;
+	int addr_len = sizeof(client_addr);
+	while (1) 
 	{
+		if (temp_last== num)
+			break;
+		if (CWND < SSTH && dupACK < 3)
+		{
+			if (list.size() * MAXLEN < CWND && temp_windowlast < num)
+			{
+				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
+				list.push(make_pair(clock(), seq % 256));
+				itw[seq % 256] = 1;
+				seq++;
+				temp_windowlast++;
+			}
+			char recv[3];
+			int recvsize = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
+			if (recvsize && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			{
+				while (list.front().second != (unsigned char)recv[2]) 
+				{
+					base++;
+					temp_last++;
+					itw[list.front().second] = 0;
+					list.pop();
+				}
+				base++;
+				temp_last++;
+				itw[list.front().second] = 0;
+				list.pop();
+				CWND += MAXLEN;
+				dupACK = 0;
+			}
+			else 
+			{
+				if (last_pack==(unsigned char)recv[2]) 
+				{
+					dupACK++;
+					if (dupACK == 3) 
+					{
+						SSTH = CWND / 2;
+						CWND = SSTH + 3 * MAXLEN;
+						seq = base;
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();	
+					}
+					last_pack = (unsigned char)recv[2];
+				}
+					if (clock() - list.front().first > TIMEOUT) 
+					{
+						seq = base;
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();
+						SSTH = CWND / 2;
+						CWND = MAXLEN;
+						dupACK = 0;
+					}
+			}
+		}
+
+		else if (CWND >= SSTH && dupACK<3) 
+		{
+			if (list.size()*MAXLEN < CWND && temp_windowlast < num) 
+			{
+				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
+				list.push(make_pair(clock(), seq % 256));
+				itw[seq % 256] = 1;
+				seq++;
+				temp_windowlast++;
+			}
+			char recv[3];
+			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr,&addr_len);
+			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			{
+				while (list.front().second != (unsigned char)recv[2]) 
+				{
+					base++;
+					temp_last++;
+					itw[list.front().second] = 0;
+					list.pop();
+				}
+				base++;
+				temp_last++;
+				itw[list.front().second] = 0;
+				list.pop();
+				CWND += MAXLEN * (MAXLEN / CWND);
+				dupACK = 0;
+			}
+			else 
+			{
+				if (last_pack==(unsigned char)recv[2]) 
+				{
+					dupACK++;
+					if (dupACK == 3) 
+					{
+						SSTH = CWND / 2;
+						CWND = SSTH + 3 * MAXLEN;
+						seq = base;
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();
+					}
+					last_pack = (unsigned char)recv[2];
+				}
+					
+				if (clock() - list.front().first > TIMEOUT) 
+				{
+					seq = base;
+					temp_windowlast -= list.size();
+					while (list.size() != 0)
+						list.pop();
+					SSTH = CWND / 2;
+					CWND = MAXLEN;
+					dupACK = 0;
+				}
+			}
+		}
+		else if (dupACK==3) 
+		{	
+			if (list.size() * MAXLEN < CWND && temp_windowlast < num) 
+			{
+				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
+				list.push(make_pair(clock(), seq % 256));
+				itw[seq % 256] = 1;
+				seq++;
+				temp_windowlast++;
+			}
+			char recv[3];
+			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
+			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
+			{
+				while (list.front().second != (unsigned char)recv[2]) 
+				{
+					base++;
+					temp_last++;
+					itw[list.front().second] = 0;
+					list.pop();
+				}
+				base++;
+				temp_last++;
+				itw[list.front().second] = 0;
+				list.pop();
+				CWND = SSTH;
+				dupACK = 0;
+			}
+			else 
+			{
+				if (last_pack == (unsigned char)recv[2]) 
+				{
+					CWND += MAXLEN;
+					last_pack = (unsigned char)recv[2];
+				}
+				if (clock() - list.front().first > TIMEOUT) 
+				{
+					seq = base;
+					temp_windowlast -= list.size();
+					while (list.size() != 0)
+						list.pop();
+					SSTH = CWND / 2;
+					CWND = MAXLEN;
+					dupACK = 0;
+				}
+			}
+		}
+	}
+}
+
+int main(){
+	
+	WSADATA wsadata;
+    if(WSAStartup(MAKEWORD(2,2),&wsadata))
+    {
 		printf("version error");
 		return 0;
 	}
-	server_addr.sin_family = AF_INET;
+    
+    server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(1234);
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    
+
 	client = socket(AF_INET, SOCK_DGRAM, 0);
-    
-    if(client == INVALID_SOCKET)
+
+	if(client == INVALID_SOCKET)
 	{
     	printf("socket set error");
     	return 0;
 	}
-	string filename;
-	printf("file name:"); 
-	cin>>filename;
-	ifstream file_get_stream(filename.c_str(),ifstream::binary);
-	int len = 0;
-	if(!file_get_stream)
-	{
-		printf("file error");
-		return 0;
-	}
-	unsigned char temp = file_get_stream.get();
-	while(file_get_stream)
-	{
-		storage[len++] = temp;
-		temp = file_get_stream.get();
-	}
-	file_get_stream.close();
-	printf("start to shake...\n");
+    
+	printf("wait for shake...\n");
 	while(1)
 	{
-		char tmp[2];
-		tmp[1] = FIRST_SHAKE;
-		tmp[0] = check_sum(tmp + 1,1);
-		sendto(client, tmp, 2, 0, (sockaddr *) &server_addr, sizeof(server_addr));
-		int begin = clock();
-		char recv[2];
-		int len = sizeof(client_addr);
-		int fail = 0;
-		while(recvfrom(client, recv, 2, 0, (sockaddr *) &server_addr, &len) == SOCKET_ERROR)
-		{
-			if (clock() - begin > TIMEOUT) 
-			{
-                fail = 1;
-                break;
-            }
-		}
-		if(fail == 0 && check_sum(recv,2) == 0 && recv[1] == SECOND_SHAKE)
-		{
-			tmp[1] = THIRD_SHAKE;
-			tmp[0] = check_sum(tmp + 1,1);
-			sendto(client, tmp, 2, 0, (sockaddr *) &server_addr, sizeof(server_addr));
-            break;
-		}
-	}
-	printf("shake over\n");
-	queue<struct bag_elem> list;
-	int send = 0;
-	int next = base;
-	int send_ok = 0;
-	int num = filename.length() / MAXLEN + (filename.length() % MAXLEN != 0);
-	while(1)
-	{
-		if(send_ok == num)
-			break;
-		if(list.size() < WINDOW_SIZE && send != num)
-		{
-			int tmp;
-			if(send == num - 1) 
-				tmp=filename.length() - (num - 1)*MAXLEN;
-			else tmp=MAXLEN;
-			bag_send((char *)filename.c_str() + send * MAXLEN,tmp,next % ((int) UCHAR_MAX + 1),send==num-1);
-			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
-			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
-			next++;
-			send++;
-		}
-		char recv[3];
-		int len_tmp = sizeof(server_addr);
-        if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]]) 
-		{
-			//if(WINDOW_SIZE<=SSTH) WINDOW_SIZE=WINDOW_SIZE*2;
-			//else WINDOW_SIZE++;
-            while (list.front().order != (unsigned char) recv[2]) 
-			{
-            	send_ok++;
-                base++;
-                bag_is_ok[list.front().order] = 0;
-                list.pop();
-            }
-            bag_is_ok[list.front().order] = 0;
-            send_ok++;
-            base++;
-            list.pop();
-        }
-		/*
-		else
-		{
-			SSTH=WINDOW_SIZE/2;
-			WINDOW_SIZE=1;
-			//cout<<"ÓµÈû!"<<endl;
-		}
-		*/
-	}
-	send = 0;
-	next = base;
-	send_ok = 0;
-	num = len / MAXLEN + (len % MAXLEN != 0);
-	int time_begin = clock();
-	while(1)
-	{
-		if(send_ok == num)break;
-		if(list.size() < WINDOW_SIZE && send != num)
-		{
-			bag_send(storage + send * MAXLEN,send == num - 1?len - (num - 1)*MAXLEN:MAXLEN,next % ((int) UCHAR_MAX + 1),send==num-1);
-			list.push(bag_elem(next % ((int) UCHAR_MAX + 1)));
-			bag_is_ok[next % ((int) UCHAR_MAX + 1)] = 1;
-			next++;
-			send++;
-			cout<<"FILLING WINDOW\n";
-			//continue;
-		}
-		char recv[3];
-		int len_tmp = sizeof(server_addr);
-		if (recvfrom(client, recv, 3, 0, (sockaddr *) &server_addr, &len_tmp) != SOCKET_ERROR && check_sum(recv, 3) == 0 && recv[1] == ACK && bag_is_ok[(unsigned char)recv[2]])
-		{
-			if(WINDOW_SIZE<=SSTH) 
-			{
-				WINDOW_SIZE=WINDOW_SIZE*2;
-				cout<<"WINDOW_SIZE twice "<<" NOW IS "<<WINDOW_SIZE<<"\n";
-			}
-			else 
-			{
-				WINDOW_SIZE++;
-				cout<<"WINDOW_SIZE plus "<<" NOW IS "<<WINDOW_SIZE<<"\n";
-			}
-            while (list.front().order != (unsigned char) recv[2]) 
-			{
-            	send_ok++;
-                base++;
-                bag_is_ok[list.front().order] = 0;
-                list.pop();
-            }
-            bag_is_ok[list.front().order] = 0;
-            send_ok++;
-            base++;
-            list.pop();
-        }
-		else
-		{
-			SSTH=WINDOW_SIZE/2;
-			WINDOW_SIZE=1;
-			cout<<"ÓµÈû!"<<endl;
-		}
+		char shake[2];
+		shake[1] = FIRST_SHAKE;
+		shake[0] = check_sum(shake + 1,1);
+		sendto(client, shake, sizeof(shake), 0, (SOCKADDR*) &server_addr, sizeof(server_addr));
 		
-	}
-	printf("already send file\n");
-	printf("start to wave\n");
-	while(1)
-	{
-		char tmp[2];
-		tmp[1] = FIRST_WAVE;
-		tmp[0] = check_sum(tmp + 1,1);
-		sendto(client, tmp, 2, 0, (sockaddr *) &server_addr, sizeof(server_addr));
 		int begin = clock();
-		char recv[2];
-		int len = sizeof(client_addr);
-		int fail = 0;
-		while(recvfrom(client, recv, 2, 0, (sockaddr *) &server_addr, &len) == SOCKET_ERROR)
+
+		char shake_recv[2];
+		int  fail = 0;
+		int  len_client_shake = sizeof(client_addr);
+		while(SOCKET_ERROR == recvfrom(client, shake_recv, sizeof(shake_recv), 0, (SOCKADDR*) &server_addr, &len_client_shake))
 		{
-			if (clock() - begin > TIMEOUT) 
+			if (clock() - begin > TIMEOUT)
 			{
                 fail = 1;
                 break;
             }
-		};
-		if(fail == 0 && check_sum(recv,2) == 0 && recv[1] == SECOND_WAVE)
+		}
+		if(fail == 0 && check_sum(shake_recv,2) == 0 && shake_recv[1] == SECOND_SHAKE)
+		{
+			shake[1] = THIRD_SHAKE;
+			shake[0] = check_sum(shake + 1,1);
+			sendto(client, shake, sizeof(shake), 0, (SOCKADDR*) &server_addr, sizeof(server_addr));
+            break;
+		}
+	}
+	printf("shake over...\n");
+	
+	while(1)
+	{
+		string filename;
+		int len = 0;
+		printf("\n\nplease give file's name:('q' to quit)\n"); 
+		cin>>filename;
+		if(!strcmp("q",filename.c_str()))
+		{
+			send_window((char*)(filename.c_str()), filename.length());
+			break;
+		}
+		ifstream file_get_stream(filename.c_str(),ifstream::binary);
+		if(!file_get_stream)
+		{
+			printf("file open error\n");
+			continue;
+		}
+		else
+		{
+			printf("file opened\n");
+		}
+		unsigned char t = file_get_stream.get();
+		while(file_get_stream)
+		{
+			storage[len++] = t;
+			t = file_get_stream.get();
+		}
+		file_get_stream.close();
+		send_window((char*)(filename.c_str()), filename.length());
+		int begintime = clock();
+		send_window(storage, len);
+		int endtime = clock();
+		memset(storage, 0, sizeof(storage) / sizeof(char));
+		int runtime = (endtime-begintime)*1000/CLOCKS_PER_SEC;
+		printf("transferring over\n");
+		printf("file transferring %d ms\n",runtime);
+	}
+
+	while(1)
+	{
+		char wave[2];
+		wave[1] = FIRST_WAVE;
+		wave[0] = check_sum(wave + 1,1);
+		sendto(client, wave, sizeof(wave), 0, (SOCKADDR *) &server_addr, sizeof(server_addr));
+
+		int begin = clock();
+		char wave_recv[2];
+		int len_client_wave = sizeof(client_addr);
+		int fail = 0;
+		while(SOCKET_ERROR == recvfrom(client, wave_recv, sizeof(wave_recv), 0, (SOCKADDR *) &server_addr, &len_client_wave))
+		{
+			if (clock() - begin > TIMEOUT)
+			{
+            	fail = 1;
+            	break;
+       		}
+		}
+		if(fail == 0 && check_sum(wave_recv,2) == 0 && wave_recv[1] == SECOND_WAVE)
 		{
             break;
 		}
-	}    
+	}
+	printf("wave over\n");
+
 	closesocket(client);
     WSACleanup();
-	printf("wave over\n");
     return 0;
 }
