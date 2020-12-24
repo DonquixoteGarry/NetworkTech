@@ -46,12 +46,10 @@ unsigned char check_sum(char *check_start,int check_len)
     return ~check_value;
 }
 
-
-bool bag_send(char* message,int len,int order,int last=0){
+bool bag_send(char* message,int len,int order,int last=0)
+{
 	if(len > MAXLEN || (last == false && len != MAXLEN))
-	{
 		return false;
-	}
 	char *tmp;
 	int tmp_len;
 	if(!last)
@@ -60,9 +58,7 @@ bool bag_send(char* message,int len,int order,int last=0){
 		tmp[1] = NOTLAST;
 		tmp[2] = order;
 		for (int i = 3; i < len + 3; i++)
-		{
 			tmp[i] = message[i - 3];
-		}
         tmp[0] = check_sum(tmp + 1, len + 2);
         tmp_len = len + 3;
 	}
@@ -73,9 +69,7 @@ bool bag_send(char* message,int len,int order,int last=0){
 		tmp[2] = order;
 		tmp[3] = len;
 		for(int i = 4;i<len+4;i++)
-		{
 			tmp[i] = message[i - 4];
-		}
 		tmp[0] = check_sum(tmp + 1 ,len + 3);
 		tmp_len = len + 4;
 	}
@@ -85,12 +79,12 @@ bool bag_send(char* message,int len,int order,int last=0){
 
 void send_window(char* message, int len) 
 {
-	queue<pair<int,int>> Window;
-	static int base = 1;	//当前滑动窗最左边的序号，??1开??
-	int seq = base;			//下一个可以进入窗口的包的序号
+	queue<pair<int,int>> list;
+	static int base = 1;
+	int seq = base;
 	int num = len / MAXLEN + (len % MAXLEN != 0);
-	int temp_windowlast = 0;//窗口最右端
-	int temp_last = 0; 		//已经确定的最后一??
+	int temp_windowlast = 0;
+	int temp_last = 0;
 	bool itw[256] = { 0 };
 	int last_pack = 0;
 	int addr_len = sizeof(client_addr);
@@ -100,10 +94,10 @@ void send_window(char* message, int len)
 			break;
 		if (CWND < SSTH && dupACK < 3)
 		{
-			if (Window.size() * MAXLEN < CWND && temp_windowlast < num)
+			if (list.size() * MAXLEN < CWND && temp_windowlast < num)
 			{
 				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				Window.push(make_pair(clock(), seq % 256));
+				list.push(make_pair(clock(), seq % 256));
 				itw[seq % 256] = 1;
 				seq++;
 				temp_windowlast++;
@@ -112,17 +106,17 @@ void send_window(char* message, int len)
 			int recvsize = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
 			if (recvsize && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
 			{
-				while (Window.front().second != (unsigned char)recv[2]) 
+				while (list.front().second != (unsigned char)recv[2]) 
 				{
 					base++;
 					temp_last++;
-					itw[Window.front().second] = 0;
-					Window.pop();
+					itw[list.front().second] = 0;
+					list.pop();
 				}
 				base++;
 				temp_last++;
-				itw[Window.front().second] = 0;
-				Window.pop();
+				itw[list.front().second] = 0;
+				list.pop();
 				CWND += MAXLEN;
 				dupACK = 0;
 			}
@@ -136,31 +130,31 @@ void send_window(char* message, int len)
 						SSTH = CWND / 2;
 						CWND = SSTH + 3 * MAXLEN;
 						seq = base;
-						temp_windowlast -= Window.size();
-						while (Window.size() != 0)
-							Window.pop();	
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();	
 					}
 					last_pack = (unsigned char)recv[2];
 				}
-					if (clock() - Window.front().first > TIMEOUT) 
+					if (clock() - list.front().first > TIMEOUT) 
 					{
 						seq = base;
-						temp_windowlast -= Window.size();
-						while (Window.size() != 0)
-							Window.pop();
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();
 						SSTH = CWND / 2;
 						CWND = MAXLEN;
 						dupACK = 0;
 					}
 			}
 		}
-		//拥塞避免阶段
+
 		else if (CWND >= SSTH && dupACK<3) 
 		{
-			if (Window.size()*MAXLEN < CWND && temp_windowlast < num) 
+			if (list.size()*MAXLEN < CWND && temp_windowlast < num) 
 			{
 				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				Window.push(make_pair(clock(), seq % 256));
+				list.push(make_pair(clock(), seq % 256));
 				itw[seq % 256] = 1;
 				seq++;
 				temp_windowlast++;
@@ -169,17 +163,17 @@ void send_window(char* message, int len)
 			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr,&addr_len);
 			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
 			{
-				while (Window.front().second != (unsigned char)recv[2]) 
+				while (list.front().second != (unsigned char)recv[2]) 
 				{
 					base++;
 					temp_last++;
-					itw[Window.front().second] = 0;
-					Window.pop();
+					itw[list.front().second] = 0;
+					list.pop();
 				}
 				base++;
 				temp_last++;
-				itw[Window.front().second] = 0;
-				Window.pop();
+				itw[list.front().second] = 0;
+				list.pop();
 				CWND += MAXLEN * (MAXLEN / CWND);
 				dupACK = 0;
 			}
@@ -193,19 +187,19 @@ void send_window(char* message, int len)
 						SSTH = CWND / 2;
 						CWND = SSTH + 3 * MAXLEN;
 						seq = base;
-						temp_windowlast -= Window.size();
-						while (Window.size() != 0)
-							Window.pop();
+						temp_windowlast -= list.size();
+						while (list.size() != 0)
+							list.pop();
 					}
 					last_pack = (unsigned char)recv[2];
 				}
 					
-				if (clock() - Window.front().first > TIMEOUT) 
+				if (clock() - list.front().first > TIMEOUT) 
 				{
 					seq = base;
-					temp_windowlast -= Window.size();
-					while (Window.size() != 0)
-						Window.pop();
+					temp_windowlast -= list.size();
+					while (list.size() != 0)
+						list.pop();
 					SSTH = CWND / 2;
 					CWND = MAXLEN;
 					dupACK = 0;
@@ -214,10 +208,10 @@ void send_window(char* message, int len)
 		}
 		else if (dupACK==3) 
 		{	
-			if (Window.size() * MAXLEN < CWND && temp_windowlast < num) 
+			if (list.size() * MAXLEN < CWND && temp_windowlast < num) 
 			{
 				bag_send(message + temp_windowlast * MAXLEN, temp_windowlast == num - 1 ? len % MAXLEN : MAXLEN, seq % 256, temp_windowlast == num - 1);
-				Window.push(make_pair(clock(), seq % 256));
+				list.push(make_pair(clock(), seq % 256));
 				itw[seq % 256] = 1;
 				seq++;
 				temp_windowlast++;
@@ -226,17 +220,17 @@ void send_window(char* message, int len)
 			bool recvsec = recvfrom(client, recv, 3, 0, (sockaddr*)&server_addr, &addr_len);
 			if (recvsec && check_sum(recv, 3) == 0 && recv[1] == ACK && itw[(unsigned char)recv[2]]) 
 			{
-				while (Window.front().second != (unsigned char)recv[2]) 
+				while (list.front().second != (unsigned char)recv[2]) 
 				{
 					base++;
 					temp_last++;
-					itw[Window.front().second] = 0;
-					Window.pop();
+					itw[list.front().second] = 0;
+					list.pop();
 				}
 				base++;
 				temp_last++;
-				itw[Window.front().second] = 0;
-				Window.pop();
+				itw[list.front().second] = 0;
+				list.pop();
 				CWND = SSTH;
 				dupACK = 0;
 			}
@@ -247,12 +241,12 @@ void send_window(char* message, int len)
 					CWND += MAXLEN;
 					last_pack = (unsigned char)recv[2];
 				}
-				if (clock() - Window.front().first > TIMEOUT) 
+				if (clock() - list.front().first > TIMEOUT) 
 				{
 					seq = base;
-					temp_windowlast -= Window.size();
-					while (Window.size() != 0)
-						Window.pop();
+					temp_windowlast -= list.size();
+					while (list.size() != 0)
+						list.pop();
 					SSTH = CWND / 2;
 					CWND = MAXLEN;
 					dupACK = 0;
@@ -282,10 +276,10 @@ int main(){
     	printf("socket set error");
     	return 0;
 	}
-    //int time_out = 1;
-    //setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_out, sizeof(time_out));
+    int time_out = 1;
+    setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_out, sizeof(time_out));
 	
-	printf("准备连接！\n");
+	printf("wait for shake...\n");
 	while(1)
 	{
 		char shake[2];
@@ -314,13 +308,13 @@ int main(){
             break;
 		}
 	}
-	printf("连接成功！\n");
+	printf("shake over...\n");
 	
 	while(1)
 	{
 		string filename;
 		int len = 0;
-		printf("请输入待发送的文件"); 
+		printf("please give file's name:\n"); 
 		cin>>filename;
 		if(!strcmp("exit",filename.c_str()))
 		{
@@ -330,12 +324,12 @@ int main(){
 		ifstream in(filename.c_str(),ifstream::binary);
 		if(!in)
 		{
-			printf("文件不存在，请输入正确的文件名：\n");
+			printf("file open error\n");
 			continue;
 		}
 		else
 		{
-			printf("文件打开成功！\n");
+			printf("file opened\n");
 		}
 		unsigned char t = in.get();
 		while(in)
@@ -350,8 +344,8 @@ int main(){
 		int endtime = clock();
 		memset(storage, 0, sizeof(storage) / sizeof(char));
 		int runtime = (endtime-begintime)*1000/CLOCKS_PER_SEC;
-		printf("文件传输成功??");
-		printf("传输时间为：%d ms\n",runtime);
+		printf("transferring over\n");
+		printf("file transferring %d ms\n",runtime);
 	}
 
 	while(1)
@@ -378,10 +372,9 @@ int main(){
             break;
 		}
 	}
-	printf("断开连接！\n");
+	printf("wave over\n");
 
 	closesocket(client);
     WSACleanup();
-	system("pause");
     return 0;
 }

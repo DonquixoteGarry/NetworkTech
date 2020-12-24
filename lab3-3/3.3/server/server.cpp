@@ -97,7 +97,7 @@ int main(){
 
     server = socket(AF_INET, SOCK_DGRAM, 0);
 
-    int time_out=1;//1ms³¬Ê±
+    int time_out=1;//1msï¿½ï¿½Ê±
     setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char *)&time_out, sizeof(time_out));
 
     if (server == INVALID_SOCKET) 
@@ -181,5 +181,7 @@ int main(){
         break;
     }
 	printf("wave over\n");
-	return 0;
+	closesocket(server);
+    WSACleanup();
+    return 0;
 }
