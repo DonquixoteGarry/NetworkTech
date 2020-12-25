@@ -41,9 +41,9 @@ void bag_recv(char *main_recv_buffer,int &len_recv)
     int len_tmp = sizeof(client_addr);
     static unsigned char recent_order = 0;
     len_recv = 0;
-    while (true) 
+    while (true)
     {
-        while (true) 
+        while (true)
         {
             memset(recv,0,sizeof(recv));
             while (recvfrom(server, recv, MAXLEN + 4, 0, (sockaddr *) &client_addr, &len_tmp) == SOCKET_ERROR);

@@ -21,7 +21,7 @@ const unsigned char LAST = 0x08;
 const unsigned char NOTLAST = 0x09;
 
 const int TIMEOUT = 500;
-int WINDOW_MAXSIZE = 1;
+int WINDOW_MAXSIZE = 50;
 SOCKET client;
 SOCKADDR_IN server_addr,client_addr;
 
