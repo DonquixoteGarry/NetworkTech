@@ -225,7 +225,12 @@ int main()
             list.pop();
         }
 	}
+	int time_end=clock();
 	printf("already send file\n");
+	int runtime = (time_end-time_begin)*1000/CLOCKS_PER_SEC;
+	printf("file transferring %d ms\n",runtime);
+	double Mbps=(len*8.0)/(runtime*100);
+	printf("transferring throughput: %f Mbps\n\n",Mbps);
 	printf("start to wave\n");
 	while(1)
 	{
