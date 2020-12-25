@@ -90,7 +90,7 @@ bool bag_send(char* message,int len,int order,int last=0)
 	return true; 
 }
 
-void send_window(char* message, int len) 
+void cwnd_send(char* message, int len) 
 {
 	queue<bag_elem> list;
 	static int base = 1;
@@ -300,8 +300,9 @@ int main(){
     	printf("socket set error");
     	return 0;
 	}
-    
-	printf("wait for shake...\n");
+	int time_out=1;
+	setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,(char*)&time_out,sizeof(time_out));
+    printf("wait for shake...\n");
 	while(1)
 	{
 		char shake[2];
@@ -340,7 +341,7 @@ int main(){
 		cin>>filename;
 		if(!strcmp("q",filename.c_str()))
 		{
-			send_window((char*)(filename.c_str()), filename.length());
+			cwnd_send((char*)(filename.c_str()), filename.length());
 			break;
 		}
 		ifstream file_get_stream(filename.c_str(),ifstream::binary);
@@ -360,14 +361,16 @@ int main(){
 			t = file_get_stream.get();
 		}
 		file_get_stream.close();
-		send_window((char*)(filename.c_str()), filename.length());
+		cwnd_send((char*)(filename.c_str()), filename.length());
 		int begintime = clock();
-		send_window(storage, len);
+		cwnd_send(storage, len);
 		int endtime = clock();
 		memset(storage, 0, sizeof(storage) / sizeof(char));
 		int runtime = (endtime-begintime)*1000/CLOCKS_PER_SEC;
 		printf("transferring over\n");
 		printf("file transferring %d ms\n",runtime);
+		double Mbps=(len*8.0)/(runtime*100);
+		printf("transferring throughput: %f Mbps\n\n",Mbps);
 	}
 
 	while(1)

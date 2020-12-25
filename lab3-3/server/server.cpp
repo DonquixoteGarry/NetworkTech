@@ -110,6 +110,8 @@ int main(){
         WSACleanup();
         return 0;
 	}
+    int time_out=1;
+    setsockopt(server,SOL_SOCKET,SO_RCVTIMEO,(char*)&time_out,sizeof(time_out));
 	printf("\nwait for shake...\n");
 	while(true){
 		char recv[2];
@@ -134,7 +136,7 @@ int main(){
             }
             if (recv[1] != THIRD_SHAKE) 
             {
-                printf("bag error(unexpected wake-3 bag)");
+                printf("bag error(unexpected shake-3 bag)");
                 return 0;
             }
 		}
