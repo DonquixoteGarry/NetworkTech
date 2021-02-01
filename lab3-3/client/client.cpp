@@ -164,7 +164,6 @@ void cwnd_send(char* message, int len)
 					}
 			}
 		}
-
 		else if (CWND >= SSTH && dupACK<3) 
 		{
 			if (list.size()*MAXLEN < CWND && send < num) 
